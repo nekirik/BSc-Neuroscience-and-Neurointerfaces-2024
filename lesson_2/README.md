@@ -53,7 +53,7 @@ import time
 import threading
 import numpy as np
 import matplotlib
-matplotlib.use('TkAgg')
+matplotlib.use('TkAgg') # PyQt5 via pip install PyQt5
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 
