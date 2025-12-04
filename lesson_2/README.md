@@ -271,6 +271,10 @@ def main():
 if __name__ == '__main__':
     main()
 ```
+
+![Adobe Express - eeg_animation](https://github.com/user-attachments/assets/52e55aa1-8b5f-49eb-8ae3-7a30e8897599)
+
+
 --- 
 ### Задание 1.1
 
@@ -358,6 +362,10 @@ def update_plot(_):
 
     return lines_eeg + lines_psd
 ```
+
+![Adobe Express - psd_animation](https://github.com/user-attachments/assets/035dcde9-4aaf-42c4-8302-ab539a5be49b)
+
+
 --- 
 ### Задание 2.1
 
@@ -456,6 +464,10 @@ def update_plot(_):
 
     return lines_eeg + lines_psd + lines_alpha
 ```
+
+![Adobe Express - alpha_animation](https://github.com/user-attachments/assets/1caa3b20-a371-4d1f-8d6b-b63d6deaa2bb)
+
+
 ---
 #### Задание 3.1
 Попробуйте отрисовать мощность бета ритма
