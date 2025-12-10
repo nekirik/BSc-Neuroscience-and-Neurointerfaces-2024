@@ -400,6 +400,12 @@ echo "B,50" | nc -u -w1 192.168.0.61 9999
 ```
 
 или через `send.py`:
+```python
+# send.py
+import socket, sys
+sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+sock.sendto((sys.argv[1] + "\n").encode(), ("192.168.0.61", 9999))
+```
 
 Вперёд на 40%
 ```python
