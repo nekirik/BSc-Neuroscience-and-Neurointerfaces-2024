@@ -84,8 +84,6 @@ def non_blocking_cond_wait(wake_event, name, total_sleep_time):
         time.sleep(0.02)
     return False
 
-TARGET_SERIAL = "821619"
-
 def on_device_list(locator, info, fail_reason):
     global device
     chosen = None
