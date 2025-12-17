@@ -18,16 +18,21 @@ from eeg_utils import *
 # Конфиг
 PLATFORM = 'mac'
 EEG_WINDOW_SECONDS = 4.0
-CHANNELS = 2
+CHANNELS = 4
 BUFFER_LEN = int(SAMPLE_RATE * EEG_WINDOW_SECONDS)
 TARGET_SERIAL = None
+THRESHOLD_ALPHA_POWER = 6.6e-11  # подбирается экспериментально
+ALPHA_MARGIN = 2.0e-11   # подбирается (важно!)
 
-#  Настройки машинки и порога 
-ESP32_IP = "192.168.0.61"  #  замените на IP вашей ESP32
+ALPHA_LOW = 8.0
+ALPHA_HIGH = 13.0
+BAR_SMOOTH = 0.1
+alpha_bar_value = 0.0
+#  Настройки машинки и порога
+ESP32_IP = "172.20.10.2"  #  замените на IP вашей ESP32
 UDP_PORT = 9999            #  должен совпадать с main.py на ESP32
-THRESHOLD = 4e-11     # порог мощности (подстройте под данные)
+THRESHOLD = 4e-11
 CALIBRATION_DURATION = 10.0  # секунд "тишины" при старте
-
 # UDP-сокет для управления
 udp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
@@ -137,7 +142,18 @@ def on_eeg(d, eeg: EEGTimedData):
         device_eeg_event.set_awake()
 
 #  Графики: добавляем порог на PSD 
-fig, (ax_eeg, ax_psd) = plt.subplots(2, 1, figsize=(10, 8), sharex=False)
+fig, (ax_eeg, ax_psd, ax_alpha) = plt.subplots(
+    3, 1, figsize=(10, 15), constrained_layout=True
+)
+
+ax_alpha.set_xlim(0, 1)
+ax_alpha.set_ylim(-0.5, 0.5)
+ax_alpha.set_yticks([])
+ax_alpha.set_xlabel("Alpha power")
+ax_alpha.set_title("Alpha rhythm amplitude (8–13 Hz)")
+
+alpha_bar = ax_alpha.barh([0], [0], height=0.6, color="green")[0]
+
 
 lines_eeg = []
 for i in range(CHANNELS):
@@ -161,12 +177,12 @@ ax_psd.set_xlim(0, 40)
 ax_psd.set_ylim(0, 1e-10)
 
 #  Серая пунктирная линия порога на PSD 
-thr_line = ax_psd.axhline(THRESHOLD, color='gray', linestyle='--', linewidth=1, label=f'Threshold = {THRESHOLD:.1e}')
+thr_line = ax_psd.axhline(THRESHOLD_ALPHA_POWER, color='gray', linestyle='--', linewidth=1, label=f'Threshold = {THRESHOLD:.1e}')
 ax_psd.legend(loc='upper right')
 
 def update_plot(_):
     global channel_names, calibration_start_time, is_calibrated, current_direction
-
+    global alpha_bar_value, THRESHOLD_ALPHA_POWER, ALPHA_MARGIN
     try:
         device_locator.update()
     except Exception as e:
@@ -200,6 +216,20 @@ def update_plot(_):
     # Обновление PSD
     try:
         freqs, psd = compute_psd_mne(buf, sfreq=SAMPLE_RATE, fmin=1.0, fmax=50.0)
+
+        alpha_power = 0.0
+
+        for i in range(psd.shape[0]):
+            alpha_power += integrate_band(freqs, psd[i], ALPHA_LOW, ALPHA_HIGH)
+
+        alpha_power /= psd.shape[0]  # среднее по каналам
+        excess = alpha_power - THRESHOLD_ALPHA_POWER
+        alpha_norm = excess / ALPHA_MARGIN
+        alpha_norm = np.clip(alpha_norm, 0.0, 1.0)
+
+        alpha_bar_value = (1 - BAR_SMOOTH) * alpha_bar_value + BAR_SMOOTH * alpha_norm
+        alpha_bar.set_width(alpha_bar_value)
+
         num_ch = min(psd.shape[0], CHANNELS)
         for i in range(num_ch):
             lines_psd[i].set_data(freqs, psd[i, :])
@@ -216,18 +246,14 @@ def update_plot(_):
         is_calibrated = True
         print("Калибровка завершена. Машинка готова к управлению.")
 
-    if is_calibrated:
-        # Решение: вперёд или назад
-        if not (psd > THRESHOLD).any():
-            if current_direction != "F":
-                send_to_esp32("F,50")
-                current_direction = "F"
-        else:
-            if current_direction != "B":
-                send_to_esp32("B,50")
-                current_direction = "B"
 
-    return lines_eeg + lines_psd
+    if is_calibrated:
+        if alpha_power > THRESHOLD_ALPHA_POWER:
+            send_to_esp32("F,100")
+        else:
+            send_to_esp32("B,100")
+
+    return lines_eeg + lines_psd + [alpha_bar]
 
 
 def main():
@@ -247,7 +273,7 @@ def main():
 
     device.set_on_connection_status_changed(on_connection_status_changed)
     device.set_on_eeg(on_eeg)
-    device.connect(bipolarChannels=True)
+    device.connect(bipolarChannels=False)
     if not non_blocking_cond_wait(device_conn_event, 'device connection', 40):
         print("Failed to connect.")
         return
@@ -267,10 +293,10 @@ def main():
     # Отображаем окно и не блокируем основной поток
     plt.show()
 
-    # Основной цикл: ждём, пока окно не закроется
+    # ОснGовной цикл: ждём, пOока окно не закроется
     try:
-        while plt.fignum_exists(fig.number):  # пока окно открыто
-            plt.pause(0.1)  # короткая пауза, чтобы не грузить CPU
+        while plt.fignum_exists(fig.number):  # поYка окно открыто
+            plt.pause(0.1)  # короткDая пауза, чтобы не грузAить CPU
     except KeyboardInterrupt:
         pass
     finally:
